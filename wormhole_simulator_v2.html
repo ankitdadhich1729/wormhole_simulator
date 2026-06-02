@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>f(R,Lm,T) Wormhole Simulator — Corrected Deflection</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Outfit:wght@300;400;600;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #060810;
+    --bg2:     #0B0D1A;
+    --bg3:     #0F1222;
+    --line:    #171B30;
+    --purple:  #8B7FE8;
+    --purpleL: #C8C4F8;
+    --teal:    #22C9A5;
+    --amber:   #F4A94E;
+    --coral:   #F07878;
+    --sky:     #5BC8F5;
+    --white:   #F0F2FF;
+    --muted:   #6B7299;
+    --dim:     #3A3F5C;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Outfit', sans-serif;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #app {
+    display: grid;
+    grid-template-rows: 48px 1fr 56px;
+    height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  #header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg2);
+  }
+  #header h1 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--white);
+  }
+  #header h1 em { font-style: normal; color: var(--purpleL); }
+  .hbadge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--dim);
+    color: var(--teal);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* ── MAIN ── */
+  #main {
+    display: grid;
+    grid-template-columns: 252px 1fr;
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+
+  .panel {
+    background: var(--bg3);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 12px;
+  }
+  .panel-title {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--dim);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* tabs */
+  .tabs { display: flex; gap: 3px; margin-bottom: 10px; }
+  .tab {
+    flex: 1; padding: 6px 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px; font-weight: 600;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: transparent; color: var(--muted);
+    cursor: pointer; text-align: center; transition: all 0.15s;
+  }
+  .tab.active { background: rgba(139,127,232,0.15); color: var(--purpleL); border-color: var(--purple); }
+  .tab:hover:not(.active) { color: var(--white); border-color: var(--muted); }
+
+  /* sliders */
+  .sl-row { margin-bottom: 8px; }
+  .sl-row:last-child { margin-bottom: 0; }
+  .sl-label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 4px;
+  }
+  .sl-label span:first-child { font-size: 11px; color: var(--muted); }
+  .sl-label span:last-child {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; font-weight: 700; color: var(--white);
+  }
+  input[type=range] {
+    -webkit-appearance: none; width: 100%; height: 3px;
+    background: var(--line); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px;
+    border-radius: 50%; background: var(--purple);
+    border: 2px solid var(--bg); cursor: pointer; transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+
+  /* canvas */
+  #canvas-area { position: relative; overflow: hidden; background: var(--bg); }
+  #canvas-area canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  #drag-hint {
+    position: absolute; top: 12px; right: 14px;
+    font-size: 10px; color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    opacity: 0.7; pointer-events: none; transition: opacity 0.5s;
+  }
+
+  /* legend */
+  #legend {
+    position: absolute; bottom: 14px; left: 14px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .leg {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 10px; color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    background: rgba(6,8,16,0.82); padding: 4px 9px 4px 6px;
+    border-radius: 5px; border: 1px solid var(--line);
+  }
+  .leg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  /* axis overlay */
+  #axis-labels {
+    position: absolute; top: 12px; left: 14px;
+    font-size: 10px; color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace; line-height: 2;
+    background: rgba(6,8,16,0.75); padding: 5px 10px;
+    border-radius: 6px; border: 1px solid var(--line);
+  }
+
+  /* ── INFO BAR ── */
+  #infobar {
+    border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(5,1fr);
+    background: var(--bg2);
+  }
+  .info-cell {
+    padding: 9px 14px; border-right: 1px solid var(--line);
+  }
+  .info-cell:last-child { border-right: none; }
+  .ic-label {
+    font-size: 8px; color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px;
+  }
+  .ic-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 700; }
+  .ok   { color: var(--teal); }
+  .warn { color: var(--amber); }
+  .bad  { color: var(--coral); }
+
+  /* deflection note tooltip */
+  #defl-note {
+    position: absolute; bottom: 80px; right: 14px;
+    max-width: 270px; padding: 10px 13px;
+    background: rgba(11,13,26,0.95);
+    border: 1px solid var(--purple);
+    border-radius: 8px;
+    font-size: 10.5px; line-height: 1.65;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+    display: none;
+  }
+  #defl-note b { color: var(--purpleL); }
+  #defl-note-toggle {
+    position: absolute; bottom: 14px; right: 14px;
+    background: rgba(11,13,26,0.9); border: 1px solid var(--purple);
+    color: var(--purpleL); font-size: 10px; border-radius: 6px;
+    padding: 4px 10px; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    transition: background 0.2s;
+  }
+  #defl-note-toggle:hover { background: rgba(139,127,232,0.2); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="header">
+    <div>
+      <h1>Dark Matter Wormhole Simulator &nbsp;·&nbsp; <em>f (R, L<sub>m</sub>, T) Gravity</em></h1>
+    </div>
+    <div class="hbadge">v2 · corrected deflection</div>
+  </div>
+
+  <div id="main">
+    <div id="sidebar">
+
+      <!-- MODE -->
+      <div class="panel">
+        <div class="panel-title">Visualization mode</div>
+        <div class="tabs">
+          <button class="tab active" data-mode="embed">Embedding</button>
+          <button class="tab" data-mode="photon">Photons</button>
+        </div>
+        <div class="sl-row" id="row-imp" style="display:none">
+          <div class="sl-label"><span>Min impact u/r₀</span><span id="v-imp">1.10</span></div>
+          <input type="range" id="s-imp" min="1.02" max="3" step="0.01" value="1.10">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>Radial range r_max</span><span id="v-rmax">10.0</span></div>
+          <input type="range" id="s-rmax" min="4" max="25" step="0.5" value="10">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>Mesh resolution</span><span id="v-res">64</span></div>
+          <input type="range" id="s-res" min="24" max="120" step="8" value="64">
+        </div>
+      </div>
+
+      <!-- DM PROFILE SELECTOR -->
+      <div class="panel">
+        <div class="panel-title">Dark matter profile</div>
+        <div class="tabs">
+          <button class="tab active" data-dm="einasto">Einasto</button>
+          <button class="tab" data-dm="burkert">Burkert</button>
+          <button class="tab" data-dm="moore">Moore</button>
+        </div>
+      </div>
+
+      <!-- EINASTO PARAMS -->
+      <div class="panel" id="panel-einasto">
+        <div class="panel-title">Einasto profile parameters</div>
+        <div class="sl-row">
+          <div class="sl-label"><span>r₀  throat radius</span><span id="v-r0">2.00</span></div>
+          <input type="range" id="s-r0" min="0.5" max="5" step="0.05" value="2.0">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>ρₛ  central density</span><span id="v-rhos">0.0010</span></div>
+          <input type="range" id="s-rhos" min="0.0001" max="0.005" step="0.0001" value="0.001">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>α  Einasto index</span><span id="v-alpha">1.23</span></div>
+          <input type="range" id="s-alpha" min="0.3" max="4" step="0.01" value="1.23">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>rₛ  scale radius</span><span id="v-rs">0.50</span></div>
+          <input type="range" id="s-rs" min="0.1" max="4" step="0.05" value="0.5">
+        </div>
+      </div>
+
+      <!-- BURKERT PARAMS -->
+      <div class="panel" id="panel-burkert" style="display:none">
+        <div class="panel-title">Burkert profile parameters</div>
+        <div class="sl-row">
+          <div class="sl-label"><span>r₀  throat radius</span><span id="v-r0b">2.40</span></div>
+          <input type="range" id="s-r0b" min="0.5" max="5" step="0.05" value="2.4">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>ρₛ  central density</span><span id="v-rhosb">0.0040</span></div>
+          <input type="range" id="s-rhosb" min="0.0001" max="0.02" step="0.0001" value="0.004">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>rₛ  scale radius</span><span id="v-rsb">3.70</span></div>
+          <input type="range" id="s-rsb" min="0.5" max="8" step="0.1" value="3.7">
+        </div>
+      </div>
+
+      <!-- MOORE PARAMS -->
+      <div class="panel" id="panel-moore" style="display:none">
+        <div class="panel-title">Moore profile parameters</div>
+        <div class="sl-row">
+          <div class="sl-label"><span>r₀  throat radius</span><span id="v-r0m">1.12</span></div>
+          <input type="range" id="s-r0m" min="0.5" max="5" step="0.05" value="1.12">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>ρₛ  central density</span><span id="v-rhosm">0.0000</span></div>
+          <input type="range" id="s-rhosm" min="0.000001" max="0.0002" step="0.000001" value="0.000014">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>rₛ  scale radius</span><span id="v-rsm">14.20</span></div>
+          <input type="range" id="s-rsm" min="2" max="25" step="0.1" value="14.2">
+        </div>
+      </div>
+
+      <!-- COUPLING -->
+      <div class="panel">
+        <div class="panel-title">f(R,Lm,T) coupling constants</div>
+        <div class="sl-row">
+          <div class="sl-label"><span>a  (L<sub>m</sub> coupling)</span><span id="v-a">2.00</span></div>
+          <input type="range" id="s-a" min="-10" max="15" step="0.25" value="2.0">
+        </div>
+        <div class="sl-row">
+          <div class="sl-label"><span>b  (T coupling)</span><span id="v-b">1.40</span></div>
+          <input type="range" id="s-b" min="-5" max="5" step="0.1" value="1.4">
+        </div>
+      </div>
+
+      <!-- ENERGY CONDITIONS ref -->
+      <div class="panel">
+        <div class="panel-title">Energy conditions</div>
+        <div style="font-size:10px;line-height:2;color:var(--muted);font-family:'IBM Plex Mono',monospace;">
+          NEC: ρ+pᵣ ≥ 0, ρ+pₜ ≥ 0<br>
+          WEC: ρ ≥ 0 + NEC<br>
+          DEC: ρ ≥ |pᵣ|, |pₜ|<br>
+          <span style="color:var(--coral);">Radial NEC violated → exotic matter</span>
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+
+    <!-- CANVAS -->
+    <div id="canvas-area">
+      <canvas id="wh"></canvas>
+      <div id="drag-hint">drag to rotate · scroll to zoom</div>
+      <div id="legend">
+        <div class="leg"><div class="leg-dot" style="background:#8B7FE8"></div>upper universe z(r) &gt; 0</div>
+        <div class="leg"><div class="leg-dot" style="background:#22C9A5"></div>lower universe z(r) &lt; 0</div>
+        <div class="leg"><div class="leg-dot" style="background:#F4A94E"></div>wormhole throat r = r₀</div>
+        <div class="leg" id="leg-photon" style="display:none"><div class="leg-dot" style="background:#5BC8F5"></div>photon — diverging (α<sub>def</sub> &lt; 0)</div>
+      </div>
+      <div id="axis-labels">
+        r₀ = <span id="ax-r0">2.00</span> &nbsp;|&nbsp; χ′(r₀) = <span id="ax-cp">—</span>
+      </div>
+      <!-- Deflection physics note -->
+      <div id="defl-note">
+        <b>Why is α_def negative?</b><br><br>
+        From Eq. (36) of the paper:<br>
+        α_def = −π + 2∫ dφ/dr · dr<br><br>
+        For these wormhole solutions the integral
+        2∫ &lt; π, so α_def &lt; 0.<br><br>
+        This means photons are <b>deflected away</b>
+        from the throat — the wormhole acts as a
+        <b>diverging lens</b>, not a focusing one.<br><br>
+        Unlike a black hole (α_def → +∞), here
+        exit rays spread <b>outward</b>, wider than
+        they entered. The photon trajectories in
+        the 3D view reflect this correctly.
+      </div>
+      <button id="defl-note-toggle">? deflection sign</button>
+    </div>
+
+  </div><!-- /main -->
+
+  <!-- INFO BAR -->
+  <div id="infobar">
+    <div class="info-cell">
+      <div class="ic-label">χ′(r₀)  [must be &lt; 1]</div>
+      <div class="ic-val" id="iv-flare">—</div>
+    </div>
+    <div class="info-cell">
+      <div class="ic-label">χ(r₀)/r₀  [must = 1]</div>
+      <div class="ic-val" id="iv-throat">—</div>
+    </div>
+    <div class="info-cell">
+      <div class="ic-label">α_def  (rad) — negative = diverging</div>
+      <div class="ic-val" id="iv-defl">—</div>
+    </div>
+    <div class="info-cell">
+      <div class="ic-label">NEC: ρ + pᵣ at throat</div>
+      <div class="ic-val" id="iv-nec">—</div>
+    </div>
+    <div class="info-cell">
+      <div class="ic-label">Lens type</div>
+      <div class="ic-val" id="iv-lens">—</div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  MATH HELPERS
+// ═══════════════════════════════════════════════════════════════════
+const PI = Math.PI;
+
+function gammaFn(z) {
+  if (z < 0.5) return PI / (Math.sin(PI * z) * gammaFn(1 - z));
+  const g = 7;
+  const c = [0.99999999999980993,676.5203681218851,-1259.1392167224028,
+             771.32342877765313,-176.61502916214059,12.507343278686905,
+             -0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  z -= 1;
+  let x = c[0];
+  for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+  const t = z + g + 0.5;
+  return Math.sqrt(2 * PI) * Math.pow(t, z + 0.5) * Math.exp(-t) * x;
+}
+
+function gammaUpperInc(a, x, terms = 200) {
+  if (x <= 0) return gammaFn(a);
+  let term = Math.exp(-x) * Math.pow(x, a) / a;
+  let lower = term;
+  for (let n = 1; n < terms; n++) {
+    term *= x / (a + n);
+    lower += term;
+    if (Math.abs(term) < 1e-14 * Math.abs(lower)) break;
+  }
+  return gammaFn(a) - lower;
+}
+
+// ── SHAPE FUNCTIONS (Eqs. 22, 24, 26 from paper) ────────────────
+
+function chiEinasto(r, p) {
+  const { r0, rhos, alpha, rs, a, b } = p;
+  const A = 16 * PI + a + 2 * b;
+  if (Math.abs(A) < 1e-10) return r0;
+  const g3a  = 3 / alpha;
+  const pref = rhos * A * Math.pow(2, 1 - 3/alpha) * Math.pow(alpha, 3/alpha - 1)
+               * Math.exp(2/alpha) * Math.pow(rs, 3);
+  const x0 = 2 * Math.pow(r0 / rs, alpha) / alpha;
+  const xr = 2 * Math.pow(r  / rs, alpha) / alpha;
+  return r0 + pref * (gammaUpperInc(g3a, x0) - gammaUpperInc(g3a, xr));
+}
+
+function chiBurkert(r, p) {
+  // Eq. 24: χ(r) = r0 + ρs(a+2b+16π)rs³/4 * [ln((rs+r)/(rs+r0)*sqrt((rs²+r²)/(rs²+r0²))) - atan(r/rs) + atan(r0/rs)]
+  const { r0, rhosb, rsb, a, b } = p;
+  const A  = 16 * PI + a + 2 * b;
+  const rs = rsb, rho = rhosb;
+  const term = rho * A * rs*rs*rs / 4 *
+    (Math.log((rs+r)/(rs+r0) * Math.sqrt((rs*rs+r*r)/(rs*rs+r0*r0)))
+     - Math.atan(r/rs) + Math.atan(r0/rs));
+  return r0 + term;
+}
+
+function chiMoore(r, p) {
+  // Eq. 26: χ(r) = r0 + (1/3)(a+2b+16π)ρs rs³ * ln[(1-(r0/rs)^1.5) / (1-(r/rs)^1.5)]
+  const { r0, rhosm, rsm, a, b } = p;
+  const A  = 16 * PI + a + 2 * b;
+  const rs = rsm, rho = rhosm;
+  const base0 = 1 - Math.pow(r0/rs, 1.5);
+  const baser  = 1 - Math.pow(r /rs, 1.5);
+  if (base0 <= 0 || baser <= 0) return r0;
+  return r0 + (1/3) * A * rho * rs*rs*rs * Math.log(base0 / baser);
+}
+
+// ── CHI PRIME (Eq. 18 + profile) ────────────────────────────────
+
+function chiPrimeEinasto(r, p) {
+  const { rhos, alpha, rs, a, b } = p;
+  const A   = 16 * PI + a + 2 * b;
+  const rho = rhos * Math.exp((2/alpha) * (1 - Math.pow(r/rs, alpha)));
+  return rho * r * r * A / 2;
+}
+
+function chiPrimeBurkert(r, p) {
+  const { rhosb, rsb, a, b } = p;
+  const A   = 16 * PI + a + 2 * b;
+  const rs  = rsb;
+  const rho = rhosb / ((1 + r/rs) * (1 + (r/rs)**2));
+  return rho * r * r * A / 2;
+}
+
+function chiPrimeMoore(r, p) {
+  const { rhosm, rsm, a, b } = p;
+  const A   = 16 * PI + a + 2 * b;
+  const rs  = rsm;
+  const base = 1 - Math.pow(r/rs, 1.5);
+  if (base <= 0 || base >= 1) return 0;
+  const rho = rhosm * Math.pow(r/rs, -1.5) / base;
+  return rho * r * r * A / 2;
+}
+
+// Dispatchers
+let currentDM = 'einasto';
+function chi(r, p)      { return currentDM==='einasto'?chiEinasto(r,p):currentDM==='burkert'?chiBurkert(r,p):chiMoore(r,p); }
+function chiPrime(r, p) { return currentDM==='einasto'?chiPrimeEinasto(r,p):currentDM==='burkert'?chiPrimeBurkert(r,p):chiPrimeMoore(r,p); }
+
+// ═══════════════════════════════════════════════════════════════════
+//  THREE.JS SETUP
+// ═══════════════════════════════════════════════════════════════════
+const canvas   = document.getElementById('wh');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x060810, 1);
+
+const scene  = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x060810, 0.02);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 500);
+camera.position.set(0, 10, 20);
+camera.lookAt(0, 0, 0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+const dl1 = new THREE.DirectionalLight(0xffffff, 1.1);
+dl1.position.set(8, 14, 10); scene.add(dl1);
+const dl2 = new THREE.DirectionalLight(0x6688ff, 0.35);
+dl2.position.set(-8, -5, -10); scene.add(dl2);
+
+// Stars
+(function() {
+  const geo = new THREE.BufferGeometry();
+  const pos = [];
+  for (let i = 0; i < 2200; i++) {
+    const r = 90 + Math.random()*130;
+    const th = Math.random()*2*PI, ph = Math.acos(2*Math.random()-1);
+    pos.push(r*Math.sin(ph)*Math.cos(th), r*Math.cos(ph), r*Math.sin(ph)*Math.sin(th));
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.5 })));
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+//  SCENE OBJECTS
+// ═══════════════════════════════════════════════════════════════════
+
+function buildEmbedSheet(p, upper) {
+  const { rmax, res } = p;
+  const r0   = getR0(p);
+  const sign = upper ? 1 : -1;
+  const nR   = res, nPhi = res * 2;
+  const dr   = (rmax - r0) / nR;
+
+  const rs = [r0], zs = [0];
+  let z = 0;
+  for (let i = 1; i <= nR; i++) {
+    const r   = r0 + i * dr;
+    const c   = chi(r, p);
+    let ratio = r / c - 1;
+    if (ratio < 0) ratio = 1e-6;
+    z += Math.pow(ratio, -0.5) * dr;
+    rs.push(r); zs.push(z);
+  }
+
+  const positions=[], normals=[], colors=[], indices=[];
+  // upper: violet-indigo gradient, lower: teal gradient
+  const colA = upper ? [0.545, 0.498, 0.910] : [0.133, 0.788, 0.647];
+  const colB = upper ? [0.18,  0.16,  0.60 ] : [0.04,  0.38,  0.28 ];
+
+  for (let i = 0; i <= nR; i++) {
+    const r = rs[i], zv = sign * zs[i];
+    const t = i / nR;
+    const col = colA.map((c,k) => c*(1-t) + colB[k]*t);
+    for (let j = 0; j <= nPhi; j++) {
+      const phi = (j/nPhi)*2*PI;
+      positions.push(r*Math.cos(phi), zv, r*Math.sin(phi));
+      normals.push(0, sign, 0);
+      colors.push(...col);
+    }
+  }
+  for (let i = 0; i < nR; i++) {
+    for (let j = 0; j < nPhi; j++) {
+      const a=i*(nPhi+1)+j, b=a+1, c=a+(nPhi+1), d=c+1;
+      indices.push(a,c,b,b,c,d);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal',   new THREE.Float32BufferAttribute(normals,   3));
+  geo.setAttribute('color',    new THREE.Float32BufferAttribute(colors,    3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+
+  return new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
+    vertexColors: true, side: THREE.DoubleSide,
+    shininess: 80, transparent: true, opacity: 0.9
+  }));
+}
+
+function buildThroatRing(p) {
+  // The wormhole throat: the minimal circle connecting the two universe sheets.
+  // This is NOT a photon sphere — it is the geometric neck at r = r0 where
+  // χ(r0) = r0 and the embedding surface is vertical (dz/dr → ∞).
+  const r0  = getR0(p);
+  const geo = new THREE.TorusGeometry(r0, Math.max(0.03, r0*0.022), 28, 120);
+  const mat = new THREE.MeshPhongMaterial({
+    color: 0xF4A94E, emissive: 0x7A4800, shininess: 140
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  return mesh;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CORRECTED PHOTON TRAJECTORIES
+//  ─────────────────────────────────────────────────────────────────
+//  Physical picture (from Eq. 36 of the paper):
+//
+//  α_def(r0_turn) = −π + 2 ∫_{r0_turn}^{∞}  (e^Ψ/r) / √[(1−χ/r)(r²/u²−e^{2Ψ})] dr
+//
+//  With constant Ψ=0 this becomes:
+//  α_def = −π + 2 ∫_{r_turn}^{∞} (u/r²) / √[(1−χ/r)(1−u²/r²)] dr
+//
+//  For these WH solutions α_def < 0 (the integral is less than π/2),
+//  meaning photons are DEFLECTED AWAY from the throat.
+//
+//  The orbit equation is derived from the null geodesic:
+//    (dφ/dr)² = u²/(r⁴) · 1/[(1−χ/r)(1−u²/r²)]
+//
+//  Integration strategy:
+//    1. Photon arrives from φ=0 at r=r_far heading toward throat.
+//    2. We integrate dr vs dφ inward to r_turn (where u²/r²=1).
+//    3. Then outward again from r_turn back to r_far.
+//    4. The TOTAL φ swept = 2·φ_min ≠ π  ⟹  deflection = 2φ_min − π.
+//    5. We place the EXIT arm at the correct angular offset so the ray
+//       fans OUTWARD (diverging), not inward (converging).
+// ═══════════════════════════════════════════════════════════════════
+function buildPhotonGroup(p) {
+  const r0   = getR0(p);
+  const rmax = p.rmax;
+  const group = new THREE.Group();
+
+  // Six photons with varying impact parameters u = factor × r0
+  const factors = [1.08, 1.2, 1.45, 1.85, 2.5, 3.4];
+
+  factors.forEach((ufac, idx) => {
+    const u   = r0 * ufac;
+    const col = new THREE.Color().setHSL(0.54 + idx * 0.03, 0.88, 0.62);
+
+    const r_turn  = u;                         // turning point: r_turn = u (Ψ=0 → u = r_turn·e^{-Ψ} = r_turn)
+    const r_start = Math.min(rmax * 0.92, rmax);
+    if (r_turn >= r_start) return;
+
+    const steps = 800;
+    const dr    = (r_start - r_turn) / steps;
+
+    // ── Integrate INWARD: r_start → r_turn  (accumulate φ_in) ──
+    const pts_in = [];
+    let phi = 0;
+    pts_in.push(new THREE.Vector3(r_start * Math.cos(phi), 0, r_start * Math.sin(phi)));
+
+    for (let i = 1; i <= steps; i++) {
+      const r     = r_start - i * dr;
+      const guard = r_turn + 2e-3;
+      if (r <= guard) break;
+      const c      = chi(r, p);
+      const radial = 1 - c / r;
+      const ang    = 1 - (u * u) / (r * r);
+      if (radial <= 1e-10 || ang <= 1e-10) break;
+      const dphi = (u / (r * r)) / Math.sqrt(radial * ang) * dr;
+      phi += dphi;
+      pts_in.push(new THREE.Vector3(r * Math.cos(phi), 0, r * Math.sin(phi)));
+    }
+
+    const phi_min = phi;   // total φ accumulated from r_start to r_turn
+
+    // ── Compute deflection: α = 2·φ_min − π ──────────────────────
+    // If α < 0, the outgoing ray exits at angle LESS than the mirror
+    // image, i.e. it bends AWAY from the throat axis.
+    // We set the outgoing arm starting at φ_min and continuing to
+    //   φ_exit = 2·φ_min   (exactly symmetric is standard Euclidean mirror)
+    // BUT the deflection shifts it by α, so the true exit direction is at
+    //   φ_out_final = 2·φ_min + α = 2·φ_min + (2·φ_min − π) = 4·φ_min − π
+    // However for visualisation the clearest approach is:
+    //   • Incoming arm from φ=0 to φ=φ_min (correctly integrated above)
+    //   • Outgoing arm: continue integrating (same |dφ/dr|) from r_turn
+    //     outward, but apply the deflection by starting the outgoing φ
+    //     at φ_mirror = 2·φ_min (simple mirror) and then offset the
+    //     FINAL exit point by α.
+    //
+    // Simplest correct approach:
+    //   outgoing φ starts at φ_min and increases with the same dφ/dr;
+    //   this gives φ_out ∈ [φ_min, 2·φ_min] at r=r_start again.
+    //   The exit angle from the INCOMING axis is 2·φ_min.
+    //   Deflection α = 2·φ_min − π.
+    //   We visualise by drawing both arms and direction arrows showing
+    //   the outgoing ray fans outward.
+
+    const pts_out = [];
+    let phi2 = phi_min;
+
+    for (let i = 1; i <= steps; i++) {
+      const r     = r_turn + i * dr;
+      if (r > r_start) break;
+      const c      = chi(r, p);
+      const radial = 1 - c / r;
+      const ang    = 1 - (u * u) / (r * r);
+      if (radial <= 1e-10 || ang <= 1e-10) continue;
+      const dphi = (u / (r * r)) / Math.sqrt(radial * ang) * dr;
+      phi2 += dphi;
+      pts_out.push(new THREE.Vector3(r * Math.cos(phi2), 0, r * Math.sin(phi2)));
+    }
+
+    // ── Build geometry ──────────────────────────────────────────
+    const allPts = [...pts_in.reverse(), ...pts_out];
+    if (allPts.length < 4) return;
+
+    const geo = new THREE.BufferGeometry().setFromPoints(allPts);
+    group.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: col, linewidth: 2 })));
+
+    // Arrow on exit showing diverging direction
+    if (pts_out.length > 8) {
+      const tip  = pts_out[pts_out.length - 1];
+      const prev = pts_out[pts_out.length - 6];
+      const dir  = new THREE.Vector3().subVectors(tip, prev).normalize();
+      const aGeo = new THREE.ConeGeometry(0.06, 0.25, 8);
+      const aMat = new THREE.MeshPhongMaterial({ color: col, emissive: col });
+      const aMesh= new THREE.Mesh(aGeo, aMat);
+      aMesh.position.copy(tip);
+      aMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      group.add(aMesh);
+
+      // Small incoming arrow too
+      if (pts_in.length > 6) {
+        const tip2  = pts_in[0];
+        const prev2 = pts_in[5];
+        const dir2  = new THREE.Vector3().subVectors(tip2, prev2).normalize();
+        const aGeo2 = new THREE.ConeGeometry(0.06, 0.25, 8);
+        const aMesh2= new THREE.Mesh(aGeo2, new THREE.MeshPhongMaterial({ color: col, emissive: col }));
+        aMesh2.position.copy(prev2);
+        aMesh2.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.negate());
+        group.add(aMesh2);
+      }
+    }
+  });
+
+  return group;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  REBUILD SCENE
+// ═══════════════════════════════════════════════════════════════════
+let sceneGroup  = null;
+let currentMode = 'embed';
+
+function getR0(p) {
+  return currentDM==='einasto'? p.r0 : currentDM==='burkert'? p.r0b : p.r0m;
+}
+
+function getParams() {
+  return {
+    r0:    +document.getElementById('s-r0').value,
+    rhos:  +document.getElementById('s-rhos').value,
+    alpha: +document.getElementById('s-alpha').value,
+    rs:    +document.getElementById('s-rs').value,
+    r0b:   +document.getElementById('s-r0b').value,
+    rhosb: +document.getElementById('s-rhosb').value,
+    rsb:   +document.getElementById('s-rsb').value,
+    r0m:   +document.getElementById('s-r0m').value,
+    rhosm: +document.getElementById('s-rhosm').value,
+    rsm:   +document.getElementById('s-rsm').value,
+    a:     +document.getElementById('s-a').value,
+    b:     +document.getElementById('s-b').value,
+    rmax:  +document.getElementById('s-rmax').value,
+    res:   +document.getElementById('s-res').value,
+    imp:   +document.getElementById('s-imp').value,
+  };
+}
+
+function rebuildScene() {
+  if (sceneGroup) scene.remove(sceneGroup);
+  sceneGroup = new THREE.Group();
+  const p = getParams();
+
+  const opacity = currentMode === 'photon' ? 0.25 : 0.9;
+  const upper = buildEmbedSheet(p, true);
+  const lower = buildEmbedSheet(p, false);
+  upper.material.opacity = opacity;
+  lower.material.opacity = opacity;
+  sceneGroup.add(upper);
+  sceneGroup.add(lower);
+  sceneGroup.add(buildThroatRing(p));
+
+  if (currentMode === 'embed') {
+    const gGeo = new THREE.GridHelper(p.rmax*2, 22, 0x171B30, 0x171B30);
+    gGeo.position.y = 0;
+    sceneGroup.add(gGeo);
+  }
+
+  if (currentMode === 'photon') {
+    sceneGroup.add(buildPhotonGroup(p));
+    document.getElementById('leg-photon').style.display = 'flex';
+  } else {
+    document.getElementById('leg-photon').style.display = 'none';
+  }
+
+  scene.add(sceneGroup);
+  updateInfo(p);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INFO + DEFLECTION ANGLE
+// ═══════════════════════════════════════════════════════════════════
+
+// Compute deflection angle via numerical integration of Eq.(36)
+// α_def = −π + 2∫_{r_turn}^{∞} (u/r²)/√[(1−χ/r)(r²/u²−1)] dr
+// With u = r_turn (turning point), so r²/u²−1 = r²/r_turn²−1
+function deflectionAngle(r_turn, p, steps = 400) {
+  const u    = r_turn;
+  const rmax = 60 * r_turn;
+  const dr   = (rmax - r_turn) / steps;
+  let   sum  = 0;
+  for (let i = 0; i < steps; i++) {
+    const r  = r_turn + (i + 0.5) * dr;
+    const c  = chi(r, p);
+    const f1 = 1 - c / r;
+    const f2 = (r * r) / (u * u) - 1;
+    if (f1 <= 0 || f2 <= 0) continue;
+    sum += (u / (r * r)) / Math.sqrt(f1 * f2) * dr;
+  }
+  // sum ≈ φ_min (half the total φ swept)
+  // α_def = 2·φ_min − π  (Eq. 36 rearranged: −π + 2∫ ≡ 2φ_min − π)
+  return -PI + 2 * sum;
+}
+
+function updateInfo(p) {
+  const r0 = getR0(p);
+  const cp  = chiPrime(r0 + 0.003, p);
+  const cv  = chi(r0, p);
+
+  const fe = document.getElementById('iv-flare');
+  fe.textContent = cp.toFixed(5);
+  fe.className   = 'ic-val ' + (cp >= 0 && cp < 1 ? 'ok' : 'bad');
+
+  const te = document.getElementById('iv-throat');
+  te.textContent = (cv/r0).toFixed(5);
+  te.className   = 'ic-val ' + (Math.abs(cv/r0 - 1) < 0.02 ? 'ok' : 'warn');
+
+  const A    = 16*PI + p.a + 2*p.b;
+  const rho2 = A>0 ? chiPrime(r0+0.003, p) * 2 / ((r0+0.003)**2 * A) : 0;
+  const pr2  = A>0 ? -2*chi(r0+0.003,p)   / ((r0+0.003)**3 * A)       : 0;
+  const nec  = rho2 + pr2;
+  const ne   = document.getElementById('iv-nec');
+  ne.textContent = nec.toFixed(6);
+  ne.className   = 'ic-val ' + (nec < 0 ? 'warn' : 'ok');
+
+  // Deflection at turning point = r0
+  const defl = deflectionAngle(r0, p, 400);
+  const de   = document.getElementById('iv-defl');
+  de.textContent = isFinite(defl) ? defl.toFixed(4) : '—';
+  // negative = diverging = CORRECT for these WH solutions
+  de.className   = 'ic-val ' + (defl < 0 ? 'ok' : 'warn');
+
+  const le = document.getElementById('iv-lens');
+  if (isFinite(defl)) {
+    le.textContent = defl < 0 ? 'DIVERGING' : 'CONVERGING';
+    le.className   = 'ic-val ' + (defl < 0 ? 'teal' : 'warn');
+    le.style.color = defl < 0 ? 'var(--teal)' : 'var(--amber)';
+  }
+
+  document.getElementById('ax-r0').textContent = r0.toFixed(2);
+  document.getElementById('ax-cp').textContent = cp.toFixed(4);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER LOOP & CONTROLS
+// ═══════════════════════════════════════════════════════════════════
+let rotY=0.4, rotX=0.38, zoom=20, isDragging=false, lastMX=0, lastMY=0, autoRotate=true;
+
+function updateCamera() {
+  camera.position.set(
+    zoom*Math.sin(rotY)*Math.cos(rotX),
+    zoom*Math.sin(rotX),
+    zoom*Math.cos(rotY)*Math.cos(rotX)
+  );
+  camera.lookAt(0,0,0);
+}
+
+function resizeRenderer() {
+  const area = document.getElementById('canvas-area');
+  renderer.setSize(area.clientWidth, area.clientHeight);
+  camera.aspect = area.clientWidth / area.clientHeight;
+  camera.updateProjectionMatrix();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (autoRotate) rotY += 0.004;
+  updateCamera();
+  renderer.render(scene, camera);
+}
+
+canvas.addEventListener('mousedown', e => { isDragging=true; autoRotate=false; lastMX=e.clientX; lastMY=e.clientY; });
+window.addEventListener('mouseup',   ()  => isDragging=false);
+window.addEventListener('mousemove', e  => {
+  if (!isDragging) return;
+  rotY += (e.clientX-lastMX)*0.007;
+  rotX += (e.clientY-lastMY)*0.004;
+  rotX  = Math.max(-1.3, Math.min(1.3, rotX));
+  lastMX=e.clientX; lastMY=e.clientY;
+});
+canvas.addEventListener('wheel', e => { zoom=Math.max(5,Math.min(55,zoom+e.deltaY*0.04)); }, { passive:true });
+let ltx=0,lty=0;
+canvas.addEventListener('touchstart', e=>{ ltx=e.touches[0].clientX; lty=e.touches[0].clientY; autoRotate=false; });
+canvas.addEventListener('touchmove',  e=>{ rotY+=(e.touches[0].clientX-ltx)*0.007; rotX+=(e.touches[0].clientY-lty)*0.004; rotX=Math.max(-1.3,Math.min(1.3,rotX)); ltx=e.touches[0].clientX; lty=e.touches[0].clientY; e.preventDefault(); },{passive:false});
+
+// ── SLIDER WIRING ───────────────────────────────────────────────
+const fmts = {
+  r0:'2', rhos:'4', alpha:'2', rs:'2',
+  r0b:'2', rhosb:'4', rsb:'2',
+  r0m:'2', rhosm:'6', rsm:'2',
+  a:'2', b:'2', rmax:'1', res:'0', imp:'2'
+};
+Object.keys(fmts).forEach(id => {
+  const sl = document.getElementById('s-'+id);
+  const vl = document.getElementById('v-'+id);
+  if (!sl||!vl) return;
+  sl.addEventListener('input', () => {
+    vl.textContent = (+sl.value).toFixed(+fmts[id]);
+    rebuildScene();
+  });
+});
+
+// ── MODE TABS ───────────────────────────────────────────────────
+document.querySelectorAll('[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode = btn.dataset.mode;
+    document.getElementById('row-imp').style.display = currentMode==='photon'?'block':'none';
+    rebuildScene();
+  });
+});
+
+// ── DM PROFILE TABS ─────────────────────────────────────────────
+document.querySelectorAll('[data-dm]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-dm]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDM = btn.dataset.dm;
+    ['einasto','burkert','moore'].forEach(dm => {
+      document.getElementById('panel-'+dm).style.display = dm===currentDM?'block':'none';
+    });
+    rebuildScene();
+  });
+});
+
+// ── DEFLECTION NOTE TOGGLE ──────────────────────────────────────
+document.getElementById('defl-note-toggle').addEventListener('click', () => {
+  const el = document.getElementById('defl-note');
+  el.style.display = el.style.display==='none'?'block':'none';
+});
+
+// ── RESIZE ──────────────────────────────────────────────────────
+const ro = new ResizeObserver(resizeRenderer);
+ro.observe(document.getElementById('canvas-area'));
+resizeRenderer();
+canvas.addEventListener('mousedown', () => {
+  document.getElementById('drag-hint').style.opacity = '0';
+}, { once: true });
+
+// ── INIT ────────────────────────────────────────────────────────
+rebuildScene();
+animate();
+</script>
+</body>
+</html>
